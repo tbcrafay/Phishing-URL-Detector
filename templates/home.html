@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <title>Dashboard - PhishGuard</title>
+</head>
+<body class="dashboard-body">
+    <nav class="navbar">
+        <div class="logo">
+            <img src="{{ url_for('static', filename='images/PhishGuard.jpeg') }}" alt="PhishGuard Logo" class="logo">
+        </div>
+        <div class="nav-links">
+            <a href="/home" class="active">Home</a>
+            <a href="/about">About Us</a>
+            <a href="{{ url_for('logout') }}" class="logout-btn">Logout</a>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        <div class="scanner-container">
+            <h1 class="glow-text">Shield Your Browsing</h1>
+            <p>Paste the URL below and let our AI analyze its DNA.</p>
+            
+            <form action="/predict" method="POST" class="scan-form">
+                <div class="search-box">
+                    <input type="text" name="url" placeholder="https://example.com" required>
+                    <button type="submit">SCAN NOW</button>
+                </div>
+            </form>
+
+            {% if prediction %}
+            <div class="result-card {{ 'phishing' if prediction == 'Phishing' else 'safe' }}">
+                <h2>Result: {{ prediction }}</h2>
+                <p>Confidence/Risk Score: <strong>{{ score }}%</strong></p>
+                <p>Analyzed URL: {{ analyzed_url }}</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

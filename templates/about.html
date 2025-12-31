@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About Us - PhishGuard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+<body class="dashboard-body">
+    <nav class="navbar">
+        <div class="logo">
+            <img src="{{ url_for('static', filename='images/PhishGuard.jpeg') }}" alt="PhishGuard Logo" class="logo">
+        </div>
+        <div class="nav-links">
+            <a href="/home">Home</a>
+            <a href="/about" class="active">About Us</a>
+            <a href="{{ url_for('logout') }}" class="logout-btn">Logout</a>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        <div class="about-container">
+            <h1 class="glow-text">Why PhishGuard?</h1>
+            
+            <div class="info-grid">
+                <div class="info-card">
+                    <h3>AI Intelligence</h3>
+                    <p>Unlike normal filters, we use SVM & Naive Bayes to detect patterns, not just names.</p>
+                </div>
+                <div class="info-card">
+                    <h3>28+ Data Points</h3>
+                    <p>We analyze URL length, dots, dashes, and sensitive keywords in real-time.</p>
+                </div>
+                <div class="info-card highlight-card">
+                    <h3>Ready to Test?</h3>
+                    <p>Don't wait! Protect yourself from fraud links now.</p>
+                    <a href="/home" class="pulse-btn">Go to Scanner 🔍</a>
+                </div>
+            </div>
+
+            <div class="about-text-box">
+                <h2>Our Mission</h2>
+                <p>Internet security is complex, but using it shouldn't be. Our mission is to provide 
+                a simple yet powerful tool for everyone to verify links before they click. 
+                Stay safe from typosquatting and structural phishing attacks.</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
