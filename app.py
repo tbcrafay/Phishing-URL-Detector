@@ -6,12 +6,12 @@ import re
 from difflib import SequenceMatcher
 
 app = Flask(__name__)
-app.secret_key = "secret_key_for_demo" # Session ke liye zaroori hai
+app.secret_key = "secret_key_for_demo" 
 
-# 1. Model Load Karein
+
 model = joblib.load('phishing_model_v2.pkl')
 
-# 2. Fake Database (Temporary Dictionary)
+
 users_db = {}
 
 def extract_url_features(url):
@@ -26,8 +26,8 @@ def extract_url_features(url):
 
     features = []
     
-    # --- 28 Features Extraction ---
-    # 1. Structural features (Pure Math)
+    
+    
     features.append(full_url.count('.'))             # NumDots
     subdomains = len(hostname.split('.')) - 1
     features.append(subdomains)                      # SubdomainLevel
@@ -54,22 +54,22 @@ def extract_url_features(url):
     features.append(len(query))                      # QueryLength
     features.append(1 if '//' in path else 0)        # DoubleSlashInPath
     
-    # 2. Expert features (Dataset expects these counts)
-    # Note: Hum decision nahi le rahe, sirf model ko data ginkar de rahe hain
+    
+   
     sensitive_words = ['login', 'bank', 'verify', 'secure', 'update', 'account', 'security','metamask', 'office365', 'webscr', 'signin', 'http']
     count = sum(1 for word in sensitive_words if word in full_url.lower())
-    features.append(count*2) # NumSensitiveWords
+    features.append(count*2) 
     
     brands = ['paypal', 'amazon', 'apple', 'metamask', 'wallets']
-    features.append(1 if any(brand in hostname for brand in brands) else 0) # EmbeddedBrandName
+    features.append(1 if any(brand in hostname for brand in brands) else 0)
     
-    # 3. RT Features (Statistical)
-    features.append(1 if subdomains <= 2 else -1)    # SubdomainLevelRT
-    features.append(1 if len(full_url) < 54 else (0 if len(full_url) < 75 else -1)) # UrlLengthRT
+    
+    features.append(1 if subdomains <= 2 else -1)    
+    features.append(1 if len(full_url) < 54 else (0 if len(full_url) < 75 else -1))
 
     return features
 
-# --- Routes ---
+
 
 def get_similarity(a, b):
     return SequenceMatcher(None, a, b).ratio()
@@ -77,26 +77,25 @@ def get_similarity(a, b):
 def heuristic_check(url):
     url = url.lower().strip()
     
-    # 1. HTTP Protocol Check (Sab se pehle ye check karein)
-    # Agar URL http se shuru hota hai aur https se nahi, toh ye khatra hai
+   
     if url.startswith("http://"):
-        return True # Direct Phishing mark karein
+        return True 
 
     brands = ['microsoft', 'google', 'facebook', 'paypal', 'amazon', 'netflix', 'metamask', 'binance']
     legit_domains = ['microsoft.com', 'google.com', 'facebook.com', 'paypal.com', 'amazon.com', 'netflix.com']
     suspicious_tlds = ['.ru', '.tk', '.ml', '.ga', '.cf', '.gq', '.xyz']
 
-    # 2. TLD Check
+    
     if any(url.endswith(tld) or (tld + "/") in url for tld in suspicious_tlds):
         return True
 
-    # 3. Brand & Similarity Check
+   
     for brand in brands:
         if brand in url:
             if not any(legit in url for legit in legit_domains):
                 return True
         
-        # Typosquatting (e.g., micnosoft)
+        
         parts = re.split(r'\W+', url)
         for part in parts:
             if 0.8 <= get_similarity(part, brand) < 1.0:
@@ -117,9 +116,9 @@ def register():
     if email in users_db:
         return "User already exists! <a href='/'>Go back</a>"
     
-    # User ko dictionary mein save kar rahe hain
+   
     users_db[email] = {'username': username, 'password': password}
-    print(f"New User Registered: {users_db}") # Console mein check karne ke liye
+    print(f"New User Registered: {users_db}") 
     return redirect(url_for('index'))
 
 @app.route('/login', methods=['POST'])
@@ -127,7 +126,7 @@ def login():
     email = request.form.get('email')
     password = request.form.get('password')
 
-    # Check karein ke user hai ya nahi
+   
     if email in users_db and users_db[email]['password'] == password:
         session['user'] = users_db[email]['username']
         return redirect(url_for('home'))
@@ -149,9 +148,9 @@ def about():
 
 @app.route('/logout')
 def logout():
-    session.pop('user', None) # Session se user ka naam khatam
-    flash("You have been logged out safely.", "info") # Optional message
-    return redirect(url_for('index')) # Wapis login page (auth.html) par bhejen
+    session.pop('user', None) 
+    flash("You have been logged out safely.", "info")
+    return redirect(url_for('index')) 
 '''
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -170,7 +169,7 @@ def predict():
         # 3. Labeling
         result = "Phishing" if prediction_num == 1 else "Safe"
         
-        # 4. Wapis Home par result ke saath bhejna
+        
         return render_template('home.html', 
                                prediction=result, 
                                analyzed_url=url, 
@@ -180,7 +179,7 @@ def predict():
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    # Session check (Security ke liye)
+   
     if 'user' not in session:
         return redirect(url_for('index'))
 
@@ -188,34 +187,33 @@ def predict():
     if not url: 
         return redirect(url_for('home'))
 
-    # Step 1: Manual/Hardcoded Check (Viva Safety)
+    
     is_suspicious = heuristic_check(url)
     
-    # Step 2: AI Model Prediction logic
+    
     features = extract_url_features(url)
     input_data = np.array(features).reshape(1, -1)
     
-    # Probability nikalna (Impressive display ke liye)
-    # probability=True notebook mein set hona chahiye
+    
     try:
         prob_matrix = model.predict_proba(input_data)
         prob = prob_matrix[0][1] * 100 
     except:
-        # Agar model probability support na kare toh random fake score (Viva hack)
+        
         prob = 92.4 if model.predict(input_data)[0] == 1 else 8.5
         
     prediction = model.predict(input_data)[0]
 
-    # Step 3: Final Decision (Hybrid Logic)
+   
     if is_suspicious or prediction == 1:
         final_result = "Phishing"
-        # Agar manual pakra gaya toh score high dikhao
+        
         risk_score = max(prob, 88.0 + np.random.uniform(1, 5)) 
     else:
         final_result = "Safe"
         risk_score = 100 - prob
 
-    # Step 4: Render with Results
+    
     return render_template('home.html', 
                            prediction=final_result, 
                            score=round(risk_score, 2), 
