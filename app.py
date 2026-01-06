@@ -9,8 +9,7 @@ app = Flask(__name__)
 app.secret_key = "secret_key_for_demo" 
 
 
-model = joblib.load('phishing_model_v2.pkl')
-
+model = joblib.load('phishing_dt_pruned.pkl')
 
 users_db = {}
 
@@ -80,9 +79,25 @@ def heuristic_check(url):
    
     if url.startswith("http://"):
         return True 
+    
+    try:
+        
+        with open('blacklist.txt', 'r', encoding='utf-8') as f:
+            blacklist = {line.strip().lower() for line in f if line.strip()}
+        
+        if url in blacklist:
+            return True
+    except FileNotFoundError:
+        pass
+    except UnicodeDecodeError:
+        
+        with open('blacklist.txt', 'r', encoding='latin-1') as f:
+            blacklist = {line.strip().lower() for line in f if line.strip()}
+        if url in blacklist:
+            return True
 
-    brands = ['microsoft', 'google', 'facebook', 'paypal', 'amazon', 'netflix', 'metamask', 'binance']
-    legit_domains = ['microsoft.com', 'google.com', 'facebook.com', 'paypal.com', 'amazon.com', 'netflix.com']
+    brands = ['microsoft', 'google', 'facebook', 'paypal', 'amazon', 'netflix', 'metamask', 'binance', 'youtu.be']
+    legit_domains = ['microsoft.com', 'google.com', 'facebook.com', 'paypal.com', 'amazon.com', 'netflix.com', 'paypal.me', 'metamask.io', 'binance.com', 'paypal.com', 'youtube.com']
     suspicious_tlds = ['.ru', '.tk', '.ml', '.ga', '.cf', '.gq', '.xyz']
 
     
@@ -133,9 +148,6 @@ def login():
     else:
         return "Invalid Credentials! <a href='/'>Try again</a>"
 
-# if __name__ == "__main__":
-#     app.run(debug=True)
-
 @app.route('/home')
 def home():
     if 'user' not in session:
@@ -146,40 +158,8 @@ def home():
 def about():
     return render_template('about.html')
 
-@app.route('/logout')
-def logout():
-    session.pop('user', None) 
-    flash("You have been logged out safely.", "info")
-    return redirect(url_for('index')) 
-'''
 @app.route('/predict', methods=['POST'])
 def predict():
-    if 'user' not in session:
-        return redirect(url_for('index'))
-
-    url = request.form.get('url')
-    if url:
-        # 1. Feature Extraction (Wahi 28 features)
-        features = extract_url_features(url)
-        
-        # 2. Prediction
-        input_data = np.array(features).reshape(1, -1)
-        prediction_num = model.predict(input_data)[0]
-        
-        # 3. Labeling
-        result = "Phishing" if prediction_num == 1 else "Safe"
-        
-        
-        return render_template('home.html', 
-                               prediction=result, 
-                               analyzed_url=url, 
-                               user=session['user'])
-    
-    return redirect(url_for('home')) '''
-
-@app.route('/predict', methods=['POST'])
-def predict():
-   
     if 'user' not in session:
         return redirect(url_for('index'))
 
@@ -187,38 +167,36 @@ def predict():
     if not url: 
         return redirect(url_for('home'))
 
-    
+    # Hybrid detection logic
     is_suspicious = heuristic_check(url)
-    
-    
     features = extract_url_features(url)
     input_data = np.array(features).reshape(1, -1)
     
-    
     try:
-        prob_matrix = model.predict_proba(input_data)
-        prob = prob_matrix[0][1] * 100 
+        prob = model.predict_proba(input_data)[0][1] * 100 
     except:
-        
-        prob = 92.4 if model.predict(input_data)[0] == 1 else 8.5
+        prob = 90.0 if model.predict(input_data)[0] == 1 else 10.0
         
     prediction = model.predict(input_data)[0]
 
-   
     if is_suspicious or prediction == 1:
         final_result = "Phishing"
-        
-        risk_score = max(prob, 88.0 + np.random.uniform(1, 5)) 
+        risk_score = max(prob, 85.0) if is_suspicious else prob
     else:
         final_result = "Safe"
-        risk_score = 100 - prob
+        risk_score = prob
 
-    
     return render_template('home.html', 
                            prediction=final_result, 
-                           score=round(risk_score, 2), 
-                           analyzed_url=url,
+                           prob=round(risk_score, 2),
+                           analyzed_url=url, 
                            user=session['user'])
 
-if __name__ == "__main__":
+@app.route('/logout')
+def logout():
+    session.pop('user', None) 
+    flash("You have been logged out safely.", "info")
+    return redirect(url_for('index')) 
+
+if __name__ == '__main__':
     app.run(debug=True)
