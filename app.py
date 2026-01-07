@@ -1,9 +1,14 @@
+from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 import joblib
 import numpy as np
 from urllib.parse import urlparse
 import re
 from difflib import SequenceMatcher
+import requests
+from bs4 import BeautifulSoup
+import json
+import os
 
 app = Flask(__name__)
 app.secret_key = "secret_key_for_demo" 
@@ -11,7 +16,8 @@ app.secret_key = "secret_key_for_demo"
 
 model = joblib.load('phishing_dt_pruned.pkl')
 
-users_db = {}
+USERS_FILE = 'users_data.json'
+COMMENTS_FILE = 'community_comments.json'
 
 def extract_url_features(url):
     # Basic Parsing
@@ -118,6 +124,38 @@ def heuristic_check(url):
 
     return False
 
+# --- User Data Handling (Persistence) ---
+def load_users():
+    if os.path.exists(USERS_FILE):
+        with open(USERS_FILE, 'r') as f:
+            return json.load(f)
+    return {}
+
+def save_user(email, username, password):
+    users = load_users()
+    users[email] = {'username': username, 'password': password}
+    with open(USERS_FILE, 'w') as f:
+        json.dump(users, f, indent=4)
+        
+# --- Community Comments Handling ---
+def load_comments():
+    if os.path.exists(COMMENTS_FILE):
+        with open(COMMENTS_FILE, 'r') as f:
+            return json.load(f)
+    return []
+
+def save_comment(username, email, text):
+    comments = load_comments()
+    new_comment = {
+        "name": username,
+        "email": email, # Backend record ke liye
+        "comment": text,
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M")
+    }
+    comments.append(new_comment)
+    with open(COMMENTS_FILE, 'w') as f:
+        json.dump(comments, f, indent=4)
+
 @app.route('/')
 def index():
     return render_template('auth.html')
@@ -128,12 +166,11 @@ def register():
     email = request.form.get('email')
     password = request.form.get('password')
 
-    if email in users_db:
+    users = load_users()
+    if email in users:
         return "User already exists! <a href='/'>Go back</a>"
     
-   
-    users_db[email] = {'username': username, 'password': password}
-    print(f"New User Registered: {users_db}") 
+    save_user(email, username, password)
     return redirect(url_for('index'))
 
 @app.route('/login', methods=['POST'])
@@ -141,9 +178,10 @@ def login():
     email = request.form.get('email')
     password = request.form.get('password')
 
-   
-    if email in users_db and users_db[email]['password'] == password:
-        session['user'] = users_db[email]['username']
+    users = load_users()
+    if email in users and users[email]['password'] == password:
+        session['user'] = users[email]['username']
+        session['email'] = email # Identifier for community page
         return redirect(url_for('home'))
     else:
         return "Invalid Credentials! <a href='/'>Try again</a>"
@@ -197,6 +235,85 @@ def logout():
     session.pop('user', None) 
     flash("You have been logged out safely.", "info")
     return redirect(url_for('index')) 
+
+NEWS_FILE = 'cyber_news_cache.json'
+
+def fetch_cyber_news():
+    news_list = []
+    try:
+        # Hum 'The Hacker News' ka use kar rahe hain (Example)
+        url = "https://thehackernews.com/"
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        response = requests.get(url, headers=headers, timeout=5)
+        
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'html.parser')
+            # News articles dhoondna
+            articles = soup.find_all('div', class_='body-post', limit=6)
+            
+            for art in articles:
+                title = art.find('h2', class_='home-title').text.strip()
+                link = art.find('a')['href']
+                desc = art.find('div', class_='home-desc').text.strip()[:100] + "..."
+                news_list.append({'title': title, 'link': link, 'description': desc})
+            
+            # Agar news mil gayi to cache mein save karlo
+            if news_list:
+                with open(NEWS_FILE, 'w') as f:
+                    json.dump(news_list, f)
+                return news_list
+    except Exception as e:
+        print(f"Scraping Error: {e}")
+    
+    # Fail-safe: Agar scraping fail hui ya block hui, to JSON se uthao
+    if os.path.exists(NEWS_FILE):
+        with open(NEWS_FILE, 'r') as f:
+            return json.load(f)
+    
+    return [] # Agar kuch bhi nahi mila
+
+@app.route('/news')
+def news():
+    if 'user' not in session:
+        return redirect(url_for('index'))
+    
+    latest_news = fetch_cyber_news()
+    return render_template('news.html', news_items=latest_news)
+
+@app.route('/community', methods=['GET', 'POST'])
+def community():
+    if 'user' not in session:
+        return redirect(url_for('index'))
+    
+    if request.method == 'POST':
+        comment_text = request.form.get('comment')
+        if comment_text:
+            save_comment(session['user'], session['email'], comment_text)
+            return redirect(url_for('community'))
+
+    all_comments = load_comments()
+    all_comments.reverse() # Latest comments upar dikhane ke liye
+    return render_template('community.html', comments=all_comments)
+
+@app.route('/delete_comment/<int:comment_index>')
+def delete_comment(comment_index):
+    if 'email' not in session:
+        return redirect(url_for('index'))
+    
+    comments = load_comments()
+    # Check karein ke index sahi hai aur user wahi hai jisne post kiya tha
+    if 0 <= comment_index < len(comments):
+        # Index reverse ho jata hai kyunki humne html mein reverse dikhaya tha
+        # Isliye hum original list se sahi comment dhoondne ke liye ye karenge:
+        original_idx = len(comments) - 1 - comment_index 
+        
+        if comments[original_idx]['email'] == session['email']:
+            comments.pop(original_idx)
+            with open(COMMENTS_FILE, 'w') as f:
+                json.dump(comments, f, indent=4)
+            flash("Comment deleted successfully!")
+            
+    return redirect(url_for('community'))
 
 if __name__ == '__main__':
     app.run(debug=True)

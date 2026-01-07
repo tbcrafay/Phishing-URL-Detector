@@ -200,7 +200,8 @@ input {
 
 .glow-text {
     font-size: 3.5rem;
-    text-shadow: 0 0 20px rgba(56, 189, 248, 0.5);
+    color: white !important; /* Isse text white ho jayega */
+    text-shadow: 0 0 20px rgba(56, 189, 248, 0.8); /* Shadow ko thora aur bright kiya hai */
     margin-bottom: 10px;
 }
 
